@@ -26,10 +26,9 @@ cyan = (0, 255, 255)
 blue = (0, 0, 255)
 purple = (150, 0, 255)
 pink = (255, 0, 255)
-brightMax = 1
-bright = brightMax
+DEFAULT_BRIGHT = 0.75
 
-running = True
+devices = None
 
 
 #============================== Light settings ================================
@@ -42,7 +41,7 @@ def rgb_to_hsbk(rgb, kelvin=3500):
     return [hue, sat , bright, kelvin]
 
 
-def notify(rgb_color, kelvin, period, bright):
+def setLight(rgb_color, period, bright, kelvin=3500, hue=None):
     # instantiate LifxLAN client, num_lights may be None (unknown).
     # In fact, you don't need to provide LifxLAN with the number of bulbs at all.
     # lifx = LifxLAN() works just as well. Knowing the number of bulbs in advance
@@ -50,24 +49,16 @@ def notify(rgb_color, kelvin, period, bright):
 
     color = rgb_to_hsbk(rgb_color, kelvin)
     color[2] = int(65535 * bright)
+    if hue != None:
+            color[0] = hue
     rapid = True if period < 0.5 else False
-    #print("bright: ", bright)
-    #print("color: ", color)
-
-    #print("Discovering lights...")
-    lifx = LifxLAN(2)
-    devices = lifx.get_lights()
-    #print("\nFound {} light(s):\n".format(len(devices)))
-
-    #print("setting light to: ", rgb_color)
 
     # Set light color and brightness
-    running = True
     for light in devices:
         try:
             #original_power = light.get_power()
             #original_color = light.get_color()
-            #light.set_power("on")
+            light.set_power("on")
             light.set_color(color, period, rapid)
         except:
             pass
@@ -75,14 +66,22 @@ def notify(rgb_color, kelvin, period, bright):
 
 #============================== Light settings ================================
 
-def main():
-    duration_secs = 1
+def notify(color=white, duration_secs=2, brightMax=DEFAULT_BRIGHT, kelvin=3500, hue=None, end=-1):
+
+    # Get lights
+    lifx = LifxLAN(2)
+    global devices
+    devices = lifx.get_lights()
+
+    # Convert to milliseconds
     transition_time_ms = duration_secs * 1000
 
-    #keyboard = Controller()
-    color = white
-    global running
+    # Get brightness for fading
+    if brightMax == None:
+        brightMax = DEFAULT_BRIGHT
+    bright = brightMax
 
+    running = True
     while (running == True):
         input = select.select([sys.stdin], [], [], 1)[0]
         if input:
@@ -110,14 +109,30 @@ def main():
                 running = False
                 break
 
-        global bright
-        kelvin = 3500
-        notify(color, kelvin, transition_time_ms, bright)
+        setLight(color, transition_time_ms, bright, kelvin, hue)
         time.sleep(0.1)
         if bright == brightMax:
-            bright = 0.25
+            bright = 0.5*brightMax
         else:
             bright = brightMax
+
+        if end > 0:
+            end -= 1
+        if end == 0:
+            running = False
+            break
+
+    if end < 0:
+        for light in devices:
+            try:
+                light.set_power("off")
+            except:
+                pass
+
+
+
+def main():
+    notify(white)
 
 
 if __name__=="__main__":

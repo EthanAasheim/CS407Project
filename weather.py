@@ -10,56 +10,101 @@ headers = {
     }
 
 
-#The majority of the weather() function was found here:
-#https://www.geeksforgeeks.org/python-find-current-weather-of-any-city-using-openweathermap-api/
-
-# Light settings
-DEF_kelvin = 3500
-DEF_period = 1
-DEF_bright = 0.75
-Max_bright = 0.75
+# Default light settings
+DEFAULT_KELVIN = 3500
+DEFAULT_PERIOD = 2
+DEFAULT_BRIGHT = 0.75
+MAX_BRIGHT = 0.75
 
 
 def setfromrange(val, oldMin, oldMax, newMin, newMax):
-    val = math.min(val, oldMax)
-    val = math.max(val, oldMin)
-    tmp = (val - oldMin) / oldMax
+    val = min(val, oldMax)
+    val = max(val, oldMin)
+    tmp = (val - oldMin) / (oldMax - oldMin)
     result = int(newMin + tmp * (newMax - newMin))
-    result = math.min(result, newMax)
-    result = math.max(result, newMin)
+    result = min(result, newMax)
+    result = max(result, newMin)
     return result
 
 
 def timeofday(time):
     str_parts = time.split()
-    mil_time = str_parts[1].split(':')[0]
+    mil_time = int(str_parts[1].split(':')[0])
 
+    # Need military time
     if (time[-2:] == "PM"):
         mil_time += 12
 
     print("time:", mil_time)
 
-    kelvin = DEF_kelvin
-    period = DEF_period
-    bright = DEF_bright
-    light_notify.notify(red, kelvin, period, bright)
+    # Default colors
+    color = yellow
+    hue = 58275
+
+    # Midnight to 6 AM -> blue to cyan
+    if mil_time < 6:
+        hue = 43634 - setfromrange(mil_time, 0, 6, 0, 43634 - 29814)
+    # 6 AM to 9 AM -> cyan to yellow
+    elif mil_time < 9:
+        hue = 29814 - setfromrange(mil_time, 6, 9, 0, 29814 - 9000)
+    # 9 AM to Noon -> yellow to white
+    elif mil_time < 12:
+        color = (color[0], color[1], setfromrange(mil_time, 9, 12, 0, 255))
+        hue = None
+    # Noon to 3 PM -> white to orange
+    elif mil_time < 15:
+        color = (color[0], color[1], setfromrange(mil_time, 9, 12, 0, 255))
+        hue = None
+    # 3 PM to 6 PM -> orange to red
+    elif mil_time < 18:
+        hue = 6500 - setfromrange(mil_time, 15, 18, 0, 6500)
+    # 6 PM to Midnight -> red to blue
+    else:
+        hue = 65535 - setfromrange(mil_time, 18, 24, 0, 65535 - 43634)
+
+    # Faster and brighter the closer to noon
+    kelvin = DEFAULT_KELVIN
+    if mil_time < 12:
+        bright = setfromrange(mil_time, 0, 12, 0.25*MAX_BRIGHT, MAX_BRIGHT)
+        period = 2*DEFAULT_PERIOD - setfromrange(mil_time, 0, 12, 0, (2 - 0.5)*DEFAULT_PERIOD)
+    else:
+        bright = MAX_BRIGHT - setfromrange(mil_time, 12, 24, 0, 0.75*MAX_BRIGHT)
+        period = setfromrange(mil_time, 12, 24, 0.5*DEFAULT_PERIOD, DEFAULT_PERIOD)
+    light_notify.notify(color, period, bright, kelvin, hue)
 
 
 def cloudcover(cover):
     print("cover:", cover)
-    kelvin = DEF_kelvin
-    period = DEF_period
-    bright = DEF_bright
-    light_notify.notify(white, kelvin, period, bright)
+
+    color = yellow
+    if cover == "Clear" or "Sunny":
+        color = yellow
+    if cover == "Mostly Clear" or "Mostly Sunny":
+        color = (255, 255, 128)
+    if cover == "Partly Cloudy" or "Partly Sunny":
+        color = white
+    if cover == "Mostly Cloudy":
+        color = cyan
+    if cover == "Cloudy":
+        color = blue
+
+    kelvin = DEFAULT_KELVIN
+    period = DEFAULT_PERIOD
+    bright = DEFAULT_BRIGHT
+    light_notify.notify(color, period, bright, kelvin)
 
 
 def temperature(temp):
-    print("temp:", temp)
+    temp = int(temp)
 
-    kelvin = setfromrange(temp, 0, 100, 2500, 9000)
-    period = 2 - setfromrange(temp, 0, 100, 0, 1.75)
-    bright = setfromrange(temp, 0, 100, 0.5*Max_bright, Max_bright)
-    light_notify.notify(white, kelvin, period, bright)
+    # Use a range of 0°C to 60°C to determine warmth of white color
+    # Warmer and faster the closer to noon
+    kelvin = 9000 - setfromrange(temp, 0, 60, 0, 9000 - 2500)
+    period = 2*DEFAULT_PERIOD - setfromrange(temp, 0, 60, 0, (2 - 0.5)*DEFAULT_PERIOD)
+    bright = setfromrange(temp, 0, 60, 0.5*MAX_BRIGHT, MAX_BRIGHT)
+    print("temp:", temp)
+    print("kelvin:", kelvin)
+    light_notify.notify(white, period, bright, kelvin)
 
 
 def weather(city, factor):
